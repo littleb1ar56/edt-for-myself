@@ -3,7 +3,7 @@
 */
 import{connect as C}from'cloudflare:sockets';
 
-const V='3.1.1';
+const V='3.1.2';
 const U='aaa6b096-1165-4bbe-935c-99f4ec902d02';
 const P='txt@kr.william.dwb.cc.cd';
 const S5='';
@@ -11,14 +11,13 @@ const GS5=false;
 const D=false;
 const SUB='sub.glimmer.hidns.vip';
 const UID='ikun';
-const K={to:6000,ed:8*1024,up:16*1024,uq:256*1024,rd:64*1024,dn:32*1024,dt:512,tc:64,ct:3*60*60*1000};
+const K={to:6000,ui:8000,ed:8*1024,up:16*1024,uq:256*1024,rd:64*1024,dn:32*1024,dt:512,tc:64,ct:3*60*60*1000};
 
 if(!/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(U))throw new Error('Invalid UUID');
 
 const z=new Uint8Array(0),te=new TextEncoder(),td=new TextDecoder(),ub=new Uint8Array(16);
 for(let i=0,p=0,c,h;i<16;i++){c=U.charCodeAt(p++);if(c===45)c=U.charCodeAt(p++);h=(c>64?c+9:c)&15;c=U.charCodeAt(p++);if(c===45)c=U.charCodeAt(p++);ub[i]=h<<4|((c>64?c+9:c)&15)}
 const tc=new Map(),tp=new Map();
-const lg=D?console.log.bind(console):()=>{},le=D?console.error.bind(console):()=>{};
 const mU=d=>{for(let i=0;i<16;i++)if(d[i+1]!==ub[i])return false;return true};
 
 export default{async fetch(r){
@@ -30,7 +29,7 @@ export default{async fetch(r){
     }
     if(r.headers.get('Upgrade')?.toLowerCase()!=='websocket')return u.pathname==='/'?new Response(`mini v${V}`,{status:200}):new Response(null,{status:404});
     const px=qP(u,'p')||P,s5=qP(u,'s5')||S5,gm=qP(u,'gs5');
-    return ws(r,px,s5,gm!==null?(gm==='1'||gm.toLowerCase()==='true'):GS5);
+    return ws(r.headers.get('sec-websocket-protocol')||'',px,s5,gm!==null?(gm==='1'||gm.toLowerCase()==='true'):GS5);
   }catch(e){return new Response('Error: '+(e?.message||'unknown'),{status:502})}
 }};
 
@@ -38,10 +37,16 @@ const race=(p,ms=K.to)=>{let t;return Promise.race([p,new Promise((_,r)=>{t=setT
 const u8=x=>x instanceof Uint8Array?x:x instanceof ArrayBuffer?new Uint8Array(x):ArrayBuffer.isView(x)?new Uint8Array(x.buffer,x.byteOffset,x.byteLength):z;
 const b64=s=>{if(!s)return null;try{let x=s.replace(/-/g,'+').replace(/_/g,'/');x=x.padEnd(Math.ceil(x.length/4)*4,'=');return Uint8Array.from(atob(x),c=>c.charCodeAt(0))}catch{return null}};
 const cat=(...a)=>{const l=a.map(u8),o=new Uint8Array(l.reduce((n,x)=>n+x.length,0));let p=0;for(const x of l){o.set(x,p);p+=x.length}return o};
-const quiet=e=>/cancel|closed|aborted/i.test(e?.message||'');
+const dbg=(s,x='')=>{if(D)console.log(`${s}${x?' '+x:''}`)};
 const rel=x=>{try{x?.releaseLock?.()}catch{}};
-const closeOne=x=>{try{const p=x?.close?.();if(p?.finally)return p.catch?.(()=>{}).finally(()=>rel(x))}catch{}rel(x)};
-const closeAll=(...a)=>{for(const x of a){if(!x)continue;if(x.sock||x.w)closeAll(x.w,x.sock);else closeOne(x)}};
+const closeAll=async(...a)=>{
+  const p=[],add=x=>{
+    if(!x)return;if(x.sock||x.w||x.r)return add(x.r),add(x.w),add(x.sock);
+    const f=x.cancel?()=>x.cancel('closed'):x.abort?()=>x.abort('closed'):()=>x.close?.();
+    p.push(Promise.resolve().then(f).catch(()=>{}).finally(()=>rel(x)));
+  };
+  a.forEach(add);await Promise.allSettled(p);
+};
 const qP=(u,k)=>{
   const q=u.pathname.slice(1)+(u.search?'&'+u.search.slice(1):'');
   for(const p of q.split('&')){
@@ -101,83 +106,86 @@ async function pT(d){
   const n=Date.now();for(const[k,v]of tc)if(v.exp<=n)tc.delete(k);
   const c=tc.get(d);if(c&&n<c.exp){tc.delete(d);tc.set(d,c);return c.v}
   if(tp.has(d))return tp.get(d);
-  const p=(async()=>{const r=await qT(d);if(!r?.length){lg(`[pT] TXT query failed: ${d}`);return null}const v=r.flatMap(x=>eT(x).split(',')).map(x=>x.trim()).filter(Boolean).map(vE).filter(Boolean);if(!v.length)return null;tc.set(d,{v,exp:Date.now()+K.ct});while(tc.size>K.tc)tc.delete(tc.keys().next().value);return v})();
+  const p=(async()=>{const r=await qT(d);if(!r?.length)return null;const v=r.flatMap(x=>eT(x).split(',')).map(x=>x.trim()).filter(Boolean).map(vE).filter(Boolean);if(!v.length)return null;tc.set(d,{v,exp:Date.now()+K.ct});while(tc.size>K.tc)tc.delete(tc.keys().next().value);return v})();
   tp.set(d,p);try{return await p}finally{tp.delete(d)}
 }
 
-function ws(r,px,s5,gs5){
-  const[client,w]=Object.values(new WebSocketPair());w.binaryType='arraybuffer';w.accept();
-  const pd=tH(px);if(pd)pT(pd).catch(e=>lg(`[pT] warmup failed: ${e?.message}`));
-  const dc=C;let c=null,dw=null,dns=false,closed=false,busy=false,hold=false,addr='',pl='';
-  const q=mkQ(K.up,K.uq,K.uq>>8),log=(i,e)=>lg(`[${addr}:${pl}] ${i}`,e||'');
-  const setC=(x,p=false)=>{if(closed){closeAll(x);return 0}c=x;hold=p;if(!hold&&!q.empty)pump();return 1};
-  const end=()=>{if(closed)return;closed=true;q.clear();closeAll(dw,c,w);dw=null;c=null;dns=false;hold=false};
-  const add=x=>{const d=u8(x);if(!d.length)return 1;if(q.push(d))return 1;end();return 0};
+function ws(eh,px,s5,gs5){
+  const[client,w]=Object.values(new WebSocketPair());w.binaryType='arraybuffer';w.accept({allowHalfOpen:true});
+  let c=null,dw=null,closed=false,busy=false,hold=false,ut=0;
+  const q=mkQ(K.up,K.uq,K.uq>>8);
+  const setC=(x,p=false)=>{if(closed){void closeAll(x);return 0}c=x;hold=p;if(!hold&&!q.empty)pump();return 1};
+  const end=async why=>{
+    if(closed)return;dbg('end',why||'done');if(ut)clearTimeout(ut);ut=0;closed=true;q.clear();hold=false;
+    const tdw=dw,tc=c;dw=null;c=null;
+    await closeAll(tdw,tc);if(w.readyState===WebSocket.OPEN)w.close(1000);
+  };
+  const add=x=>{const d=u8(x);if(!d.length)return 1;if(q.push(d))return 1;void end('queue');return 0};
+  const udpIdle=()=>{if(ut)clearTimeout(ut);ut=setTimeout(()=>void end('udp idle'),K.ui)};
   const open=async d=>{
     const p=pV(d);if(!p)throw new Error('Invalid VLESS request');
-    addr=p.addr;pl=`${p.port}--${Math.random()} ${p.isUDP?'udp ':'tcp '}`;
     const vh=new Uint8Array([p.ver,0]),[first]=q.pack(d.subarray(p.idx));
+    dbg('open',`${p.isUDP?'udp':'tcp'} ${p.addr}:${p.port} first=${first?.byteLength||0}`);
     if(p.isUDP)return openU(p,first,vh);
     if(w.readyState!==WebSocket.OPEN)throw new Error('ws closed');
     w.send(vh);
-    const nc=await cn(dc,p.addr,p.port,first,px,s5,gs5,w,log);if(!setC(nc))return;rl(nc,w,log,end,setC).catch(e=>le('rl error',e?.message));
+    const nc=await cn(p.addr,p.port,first,px,s5,gs5,w);if(!setC(nc))return;rl(nc,w,end,setC).catch(()=>void end('remote error'));
   };
-  const openU=async(p,first,vh)=>{if(p.port!==53)throw new Error('Invalid UDP port');const ndw=await hU(w,vh,log,end);if(closed){closeAll(ndw);return}dw=ndw;dns=true;if(first?.byteLength)await dw.write(first)};
-  const pump=async()=>{if(busy||closed)return;busy=true;try{for(;;){if(closed||hold)break;const[d]=q.pack();if(!d)break;if(dns&&dw){await dw.write(d);continue}if(c?.w){await c.w.write(d);continue}await open(d)}}catch(e){log('write error',e?.message);end()}finally{busy=false;if(!q.empty&&!closed&&!hold)queueMicrotask(pump)}};
-  const eh=r.headers.get('sec-websocket-protocol')||'',ed=eh.length<=K.ed*4/3+4?b64(eh):null;if(ed&&ed.byteLength<=K.ed&&add(ed))pump();
-  w.addEventListener('message',e=>{if(!closed&&add(e.data))pump()});w.addEventListener('close',end);w.addEventListener('error',end);
+  const openU=async(p,first,vh)=>{if(p.port!==53)throw new Error('Invalid UDP port');dw=hU(w,vh,udpIdle);if(first?.byteLength)await dw.write(first)};
+  const pump=async()=>{if(busy||closed)return;busy=true;try{for(;;){if(closed||hold)break;const[d]=q.pack();if(!d)break;if(dw){if(ut)clearTimeout(ut);ut=0;await dw.write(d);continue}if(c?.w){await c.w.write(d);continue}await open(d)}}catch(e){dbg('pump error',e?.message||'error');await end('pump')}finally{busy=false;if(!q.empty&&!closed&&!hold)queueMicrotask(pump)}};
+  const ed=eh.length<=K.ed*4/3+4?b64(eh):null;if(ed&&ed.byteLength<=K.ed&&add(ed))pump();
+  w.addEventListener('message',e=>{if(!closed&&add(e.data))pump()});w.addEventListener('close',()=>void end('client'));w.addEventListener('error',()=>void end('client error'));
   return new Response(null,{status:101,webSocket:client,headers:{'Sec-WebSocket-Extensions':''}});
 }
 
-async function cn(dc,addr,port,data,px,s5,gs5,w,log){
+async function cn(addr,port,data,px,s5,gs5,w){
   data=data||z;
-  const cfg=s5?pS(s5,dc):null,fb=()=>cfg?cfg.isHttp?hC(addr,port,cfg):sC(addr,port,cfg):pC(dc,px,port);
-  const use=async c=>{try{if(w.readyState!==WebSocket.OPEN)throw new Error('closed');c.w||=c.sock.writable.getWriter();if(data.length)await c.w.write(data);return c}catch(e){closeAll(c);throw e}};
+  const cfg=s5?pS(s5):null,fb=()=>cfg?cfg.isHttp?hC(addr,port,cfg):sC(addr,port,cfg):pC(px,port);
+  const use=async c=>{try{if(w.readyState!==WebSocket.OPEN)throw new Error('closed');c.w||=c.sock.writable.getWriter();if(data.length)await c.w.write(data);return c}catch(e){await closeAll(c);throw e}};
   if(gs5&&cfg)return use(await fb());
-  let c=null;try{c=await dC(dc,addr,port);c=await use(c);c.retry=async()=>use(await fb());return c}catch(e){closeAll(c);if(w.readyState!==WebSocket.OPEN)throw e;log(`direct failed, fallback to proxy: ${e?.message}`);return use(await fb())}
+  try{const c=await use(await dC(addr,port));c.retry=async()=>use(await fb());return c}catch(e){if(w.readyState!==WebSocket.OPEN)throw e;dbg('tcp fallback',e?.message||'direct failed');return use(await fb())}
 }
 
-async function dC(dc,h,p){const sock=dc({hostname:h,port:p});try{await race(sock.opened);return{sock,tail:z,w:null}}catch(e){closeAll(sock);throw e}}
-async function pC(dc,px,port){
+async function dC(h,p){const sock=C({hostname:h,port:p});try{await race(sock.opened);return{sock}}catch(e){await closeAll(sock);throw e}}
+async function pC(px,port){
   const d=tH(px);
-  if(d){const l=await pT(d);if(l?.length){const x=l[Math.floor(Math.random()*l.length)];return dC(dc,x.h,x.p)}const[h,p]=pH(d,port);return dC(dc,h,p)}
-  const[h,p]=pH(px,port);return dC(dc,h,p);
+  if(d){const l=await pT(d);if(l?.length){const x=l[Math.floor(Math.random()*l.length)];return dC(x.h,x.p)}px=d}
+  const[h,p]=pH(px,port);return dC(h,p);
 }
-async function rl(c,w,log,end,setC){
+async function rl(c,w,end,setC){
   const tx=mkD(w);let has=false,buf=new ArrayBuffer(K.rd),r=null;
   for(;;){
-    let err=null;has=false;r=null;
+    has=false;r=null;
     try{
-      if(c.tail.length){has=true;tx.send(c.tail);c.tail=z}
-      r=c.sock.readable.getReader({mode:'byob'});
+      if(c.tail?.length){has=true;tx.send(c.tail);c.tail=z}
+      r=c.sock.readable.getReader({mode:'byob'});c.r=r;
       for(;;){
         const{done,value}=await r.read(new Uint8Array(buf,0,K.rd));if(done)break;
         const d=u8(value);if(!d.length)continue;has=true;
         if(d.byteLength>=K.rd>>1){tx.flush();if(w.readyState!==WebSocket.OPEN)throw new Error('ws closed');w.send(d);buf=new ArrayBuffer(K.rd)}else{tx.send(d.slice());buf=d.buffer}
       }
-      tx.flush();log(`remote readable close with hasIncomingData is ${has}`);
-    }catch(e){err=e;try{tx.flush()}catch{}}finally{closeAll(r)}
+      tx.flush();
+    }catch{try{tx.flush()}catch{}}finally{if(c.r===r)c.r=null;await closeAll(r)}
     if(!has&&c.retry&&w.readyState===WebSocket.OPEN){
-      const old=c;if(!setC(null,true)){closeAll(old);return}closeAll(old);log('retry fallback');
-      try{c=await old.retry();if(!setC(c))return;continue}catch(e){log(`fallback failed: ${e?.message}`)}
+      const old=c;if(!setC(null,true)){await closeAll(old);return}await closeAll(old);
+      try{c=await old.retry();if(!setC(c))return;continue}catch{}
     }
-    if(err&&!quiet(err))le('remoteSocketToWS has exception',err?.stack||err);
-    end();return;
+    await end('remote');return;
   }
 }
 
 async function hC(h,pt,c){
-  const x=await dC(c.dc,c.h,c.pt);let r=null;
+  const x=await dC(c.h,c.pt);let r=null;
   try{
     const hh=h.includes(':')?`[${h}]`:h,auth=c.u&&c.p?`Proxy-Authorization: Basic ${btoa(c.u+':'+c.p)}\r\n`:'';
     x.w=x.sock.writable.getWriter();await x.w.write(te.encode(`CONNECT ${hh}:${pt} HTTP/1.1\r\nHost: ${hh}:${pt}\r\n${auth}Connection: Keep-Alive\r\n\r\n`));
     r=x.sock.readable.getReader();let b=z;
-    for(;;){const{value,done}=await race(r.read());if(done)throw new Error('Proxy closed');b=b.length?cat(b,value):u8(value);const i=hEnd(b);if(i===-1)continue;const t=td.decode(b.slice(0,i+4));if(!t.startsWith('HTTP/1.1 200')&&!t.startsWith('HTTP/1.0 200'))throw new Error('Connect failed');x.tail=b.slice(i+4);closeAll(r);return x}
-  }catch(e){closeAll(r,x);throw e}
+    for(;;){const{value,done}=await race(r.read());if(done)throw new Error('Proxy closed');b=b.length?cat(b,value):u8(value);const i=hEnd(b);if(i===-1)continue;const t=td.decode(b.slice(0,i+4));if(!t.startsWith('HTTP/1.1 200')&&!t.startsWith('HTTP/1.0 200'))throw new Error('Connect failed');const tail=b.slice(i+4);if(tail.length)x.tail=tail;rel(r);return x}
+  }catch(e){await closeAll(r,x);throw e}
 }
 
 async function sC(h,pt,c){
-  const x=await dC(c.dc,c.h,c.pt);let r=null;
+  const x=await dC(c.h,c.pt);let r=null;
   try{
     x.w=x.sock.writable.getWriter();r=x.sock.readable.getReader();
     await x.w.write(new Uint8Array([5,2,0,2]));let b=z,head;[head,b]=await rN(r,b,2);
@@ -186,19 +194,24 @@ async function sC(h,pt,c){
     const a=sA(h),req=new Uint8Array(5+a.length);req[0]=5;req[1]=1;req[2]=0;req.set(a,3);req[3+a.length]=pt>>8;req[4+a.length]=pt&255;await x.w.write(req);
     [head,b]=await rN(r,b,4);if(head[1]!==0)throw new Error('Connect failed');
     if(head[3]===1)[,b]=await rN(r,b,6);else if(head[3]===4)[,b]=await rN(r,b,18);else if(head[3]===3){let l;[l,b]=await rN(r,b,1);[,b]=await rN(r,b,l[0]+2)}else throw new Error('Invalid atyp');
-    x.tail=b;closeAll(r);return x;
-  }catch(e){closeAll(r,x);throw e}
+    if(b.length)x.tail=b;rel(r);return x;
+  }catch(e){await closeAll(r,x);throw e}
 }
 
 async function rN(r,b,n){while(b.length<n){const{value,done}=await race(r.read());if(done)throw new Error('Proxy closed');b=b.length?cat(b,value):u8(value)}return[b.slice(0,n),b.slice(n)]}
 const hEnd=b=>{for(let i=0;i+3<b.length;i++)if(b[i]===13&&b[i+1]===10&&b[i+2]===13&&b[i+3]===10)return i;return-1};
 
-async function hU(w,vh,log,end){
-  let sent=false,cache=z;
-  const ts=new TransformStream({transform(ch,c){let d=u8(ch),i=0;if(cache.length){d=cat(cache,d);cache=z}for(;i+2<=d.length;){const l=(d[i]<<8)|d[i+1];if(i+2+l>d.length)break;c.enqueue(d.slice(i+2,i+2+l));i+=2+l}if(i<d.length)cache=d.slice(i)}});
-  const out=new WritableStream({async write(q){try{const r=await fTO('https://cloudflare-dns.com/dns-query',{method:'POST',headers:{'content-type':'application/dns-message'},body:q});if(!r.ok){log(`doh error status ${r.status}`);return}const d=new Uint8Array(await r.arrayBuffer()),l=new Uint8Array([d.length>>8,d.length&255]);log(`doh success and dns message length is ${d.length}`);if(w.readyState!==WebSocket.OPEN)return;w.send(sent?cat(l,d):cat(vh,l,d));sent=true}catch(e){log('dns udp has error'+e)}}});
-  ts.readable.pipeTo(out).catch(e=>{log('dns pipeTo error',e?.message||e);end()});
-  return ts.writable.getWriter();
+function hU(w,vh,done){
+  let sent=false,cache=z,closed=false,send=async q=>{
+    if(closed)return;
+    try{const r=await fTO('https://cloudflare-dns.com/dns-query',{method:'POST',headers:{'content-type':'application/dns-message'},body:q});if(!r.ok){dbg('udp doh status',String(r.status));return}const d=new Uint8Array(await r.arrayBuffer()),l=new Uint8Array([d.length>>8,d.length&255]);if(w.readyState!==WebSocket.OPEN)return;w.send(sent?cat(l,d):cat(vh,l,d));sent=true;done?.()}catch(e){dbg('udp doh error',e?.message||'error')}
+  };
+  return{write:async ch=>{
+    if(closed)return;
+    let d=u8(ch),i=0;if(cache.length){d=cat(cache,d);cache=z}
+    for(;i+2<=d.length;){const l=(d[i]<<8)|d[i+1];if(i+2+l>d.length)break;await send(d.slice(i+2,i+2+l));i+=2+l}
+    if(i<d.length)cache=d.slice(i);
+  },close(){closed=true;cache=z}};
 }
 
 function pV(d){
@@ -214,10 +227,9 @@ function pV(d){
   return{addr,port,idx:ai,ver,isUDP:cmd===2};
 }
 
-function pS(s,dc){
+function pS(s){
   const isHttp=/^https?:\/\//i.test(s);s=s.replace(/^(socks5?|https?):\/\//i,'');
   const at=s.lastIndexOf('@'),hp=at!==-1?s.slice(at+1):s,[h,pt]=pH(hp);
-  if(at===-1)return{u:'',p:'',h,pt,isHttp,dc};
-  const up=s.slice(0,at),i=up.indexOf(':');
-  return i===-1?{u:'',p:'',h,pt,isHttp,dc}:{u:up.slice(0,i),p:up.slice(i+1),h,pt,isHttp,dc};
+  const up=at!==-1?s.slice(0,at):'',i=up.indexOf(':');
+  return{u:i<0?'':up.slice(0,i),p:i<0?'':up.slice(i+1),h,pt,isHttp};
 }
