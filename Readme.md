@@ -21,7 +21,7 @@ https://your-worker.domain/ikun?sub=sub.cmliussss.net
 
 ### 1.2 手动配置节点格式
 ```
-vless://@<优选域名或ip>:<端口>?encryption=none&security=tls&sni=<部署的域名>&type=ws&host=<部署的域名>&path=<路径>#<备注>
+vless://<UUID>@<优选域名或ip>:<端口>?encryption=none&security=tls&sni=<部署的域名>&type=ws&host=<部署的域名>&path=<路径>#<备注>
 ```
 
 ### 1.3 连接逻辑

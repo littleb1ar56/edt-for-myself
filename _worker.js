@@ -13,7 +13,7 @@ const SUB='sub.glimmer.hidns.vip';
 const UID='ikun';
 const K={to:6000,ui:8000,ed:8*1024,up:16*1024,uq:256*1024,rd:64*1024,dn:32*1024,dt:512,tc:64,ct:3*60*60*1000};
 
-if(!/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(U))throw new Error('Invalid UUID');
+if(!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(U))throw new Error('Invalid UUID');
 
 const z=new Uint8Array(0),te=new TextEncoder(),td=new TextDecoder(),ub=new Uint8Array(16);
 for(let i=0,p=0,c,h;i<16;i++){c=U.charCodeAt(p++);if(c===45)c=U.charCodeAt(p++);h=(c>64?c+9:c)&15;c=U.charCodeAt(p++);if(c===45)c=U.charCodeAt(p++);ub[i]=h<<4|((c>64?c+9:c)&15)}
@@ -60,8 +60,8 @@ const qP=(u,k)=>{
 
 const pH=(s,d=443)=>{
   if(!s)return[null,d];s=String(s).trim();
-  if(s[0]==='['){const i=s.indexOf(']');if(i>0)return[s.slice(1,i),s[i+1]===':'?Number(s.slice(i+2))||d:d]}
-  const i=s.lastIndexOf(':');return i>0&&s.indexOf(':')===i?[s.slice(0,i),Number(s.slice(i+1))||d]:[s,d];
+  if(s[0]==='['){const i=s.indexOf(']');if(i>0)return[s.slice(1,i),s[i+1]===':'?Number(s.slice(i+2)):d]}
+  const i=s.lastIndexOf(':');return i>0&&s.indexOf(':')===i?[s.slice(0,i),Number(s.slice(i+1))]:[s,d];
 };
 
 const iV=h=>/^((25[0-5]|2[0-4]\d|[01]?\d\d?)\.){3}(25[0-5]|2[0-4]\d|[01]?\d\d?)$/.test(h);
@@ -234,7 +234,7 @@ function pV(d){
 }
 
 function pS(s){
-  const isHttp=/^https?:\/\//i.test(s);s=s.replace(/^(socks5?|https?):\/\//i,'');
+  const isHttp=/^http:\/\//i.test(s);s=s.replace(/^(socks5?|http):\/\//i,'');
   const at=s.lastIndexOf('@'),hp=at!==-1?s.slice(at+1):s,[h,pt]=pH(hp);
   const up=at!==-1?s.slice(0,at):'',i=up.indexOf(':');
   return{u:i<0?'':up.slice(0,i),p:i<0?'':up.slice(i+1),h,pt,isHttp};
