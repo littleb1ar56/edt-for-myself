@@ -1,9 +1,7 @@
 /*
  本项目仅作为学习使用，请勿用于非法用途。
 */
-import{connect as C}from'cloudflare:sockets';
-
-const V='3.1.2';
+const V='3.1.4';
 const U='aaa6b096-1165-4bbe-935c-99f4ec902d02';
 const P='txt@kr.william.dwb.cc.cd';
 const S5='';
@@ -11,7 +9,7 @@ const GS5=false;
 const D=false;
 const SUB='sub.glimmer.hidns.vip';
 const UID='ikun';
-const K={to:6000,ui:8000,ed:8*1024,up:16*1024,uq:256*1024,rd:64*1024,dn:32*1024,dt:512,tc:64,ct:3*60*60*1000};
+const K={to:6000,ui:8000,ed:8*1024,up:16*1024,uq:256*1024,rd:64*1024,dn:32*1024,dt:512,tc:64,ct:60*60*1000};
 
 if(!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(U))throw new Error('Invalid UUID');
 
@@ -29,7 +27,7 @@ export default{async fetch(r){
     }
     if(r.headers.get('Upgrade')?.toLowerCase()!=='websocket')return u.pathname==='/'?new Response(`mini v${V}`,{status:200}):new Response(null,{status:404});
     const px=qP(u,'p')||P,s5=qP(u,'s5')||S5,gm=qP(u,'gs5');
-    return ws(r.headers.get('sec-websocket-protocol')||'',px,s5,gm!==null?(gm==='1'||gm.toLowerCase()==='true'):GS5);
+    return ws(r,px,s5,gm!==null?(gm==='1'||gm.toLowerCase()==='true'):GS5);
   }catch(e){return new Response('Error: '+(e?.message||'unknown'),{status:502})}
 }};
 
@@ -112,7 +110,8 @@ async function pT(d){
   tp.set(d,p);try{return await p}finally{tp.delete(d)}
 }
 
-function ws(eh,px,s5,gs5){
+function ws(r,px,s5,gs5){
+  const eh=r.headers.get('sec-websocket-protocol')||'',dc=r.fetcher?.connect?.bind(r.fetcher);if(!dc)throw new Error('connect unavailable');
   const[client,w]=Object.values(new WebSocketPair());w.binaryType='arraybuffer';w.accept({allowHalfOpen:true});
   const pd=tH(px);if(pd)pT(pd).catch(e=>{if(!quiet(e))dbe('txt warmup failed',e)});
   let c=null,dw=null,closed=false,busy=false,hold=false,ut=0;
@@ -133,7 +132,7 @@ function ws(eh,px,s5,gs5){
     if(p.isUDP)return openU(p,first,vh);
     if(w.readyState!==WebSocket.OPEN)throw new Error('ws closed');
     w.send(vh);
-    const nc=await cn(p.addr,p.port,first,px,s5,gs5,w);if(!setC(nc))return;rl(nc,w,end,setC).catch(e=>{if(!quiet(e))dbe('rl failed',e);stop('remote error')});
+    const nc=await cn(dc,p.addr,p.port,first,px,s5,gs5,w);if(!setC(nc))return;rl(nc,w,end,setC).catch(e=>{if(!quiet(e))dbe('rl failed',e);stop('remote error')});
   };
   const openU=async(p,first,vh)=>{if(p.port!==53)throw new Error('Invalid UDP port');dw=hU(w,vh,udpIdle);if(first?.byteLength)await dw.write(first)};
   const pump=async()=>{if(busy||closed)return;busy=true;try{for(;;){if(closed||hold)break;const[d]=q.pack();if(!d)break;if(dw){if(ut)clearTimeout(ut);ut=0;await dw.write(d);continue}if(c?.w){await c.w.write(d);continue}await open(d)}}catch(e){if(!quiet(e))dbg('pump error',e?.message||'error');await end('pump')}finally{busy=false;if(!q.empty&&!closed&&!hold)queueMicrotask(pump)}};
@@ -142,19 +141,19 @@ function ws(eh,px,s5,gs5){
   return new Response(null,{status:101,webSocket:client,headers:{'Sec-WebSocket-Extensions':''}});
 }
 
-async function cn(addr,port,data,px,s5,gs5,w){
+async function cn(dc,addr,port,data,px,s5,gs5,w){
   data=data||z;
-  const cfg=s5?pS(s5):null,fb=()=>cfg?cfg.isHttp?hC(addr,port,cfg):sC(addr,port,cfg):pC(px,port);
+  const cfg=s5?pS(s5):null,fb=()=>cfg?cfg.isHttp?hC(dc,addr,port,cfg):sC(dc,addr,port,cfg):pC(dc,px,port);
   const use=async c=>{try{if(w.readyState!==WebSocket.OPEN)throw new Error('closed');c.w||=c.sock.writable.getWriter();if(data.length)await c.w.write(data);return c}catch(e){await closeAll(c);throw e}};
   if(gs5&&cfg)return use(await fb());
-  try{const c=await use(await dC(addr,port));c.retry=async()=>use(await fb());return c}catch(e){if(w.readyState!==WebSocket.OPEN)throw e;dbg('tcp fallback',e?.message||'direct failed');return use(await fb())}
+  try{const c=await use(await dC(dc,addr,port));c.retry=async()=>use(await fb());return c}catch(e){if(w.readyState!==WebSocket.OPEN)throw e;dbg('tcp fallback',e?.message||'direct failed');return use(await fb())}
 }
 
-async function dC(h,p){const sock=C({hostname:h,port:p});try{await race(sock.opened);return{sock}}catch(e){await closeAll(sock);throw e}}
-async function pC(px,port){
+async function dC(dc,h,p){const sock=dc({hostname:h,port:p});try{await race(sock.opened);return{sock}}catch(e){await closeAll(sock);throw e}}
+async function pC(dc,px,port){
   const d=tH(px);
-  if(d){const l=await pT(d);if(l?.length){const x=l[Math.floor(Math.random()*l.length)];return dC(x.h,x.p)}const[h,p]=pH(d,port);dbg('txt fallback',`${h}:${p}`);return dC(h,p)}
-  const[h,p]=pH(px,port);return dC(h,p);
+  if(d){const l=await pT(d);if(l?.length){const x=l[Math.floor(Math.random()*l.length)];return dC(dc,x.h,x.p)}const[h,p]=pH(d,port);dbg('txt fallback',`${h}:${p}`);return dC(dc,h,p)}
+  const[h,p]=pH(px,port);return dC(dc,h,p);
 }
 async function rl(c,w,end,setC){
   const tx=mkD(w);let has=false,buf=new ArrayBuffer(K.rd),r=null;
@@ -180,18 +179,18 @@ async function rl(c,w,end,setC){
   }
 }
 
-async function hC(h,pt,c){
-  const x=await dC(c.h,c.pt);let r=null;
+async function hC(dc,h,pt,c){
+  const x=await dC(dc,c.h,c.pt);let r=null;
   try{
     const hh=h.includes(':')?`[${h}]`:h,auth=c.u&&c.p?`Proxy-Authorization: Basic ${btoa(c.u+':'+c.p)}\r\n`:'';
     x.w=x.sock.writable.getWriter();await x.w.write(te.encode(`CONNECT ${hh}:${pt} HTTP/1.1\r\nHost: ${hh}:${pt}\r\n${auth}Connection: Keep-Alive\r\n\r\n`));
     r=x.sock.readable.getReader();let b=z;
-    for(;;){const{value,done}=await race(r.read());if(done)throw new Error('Proxy closed');b=b.length?cat(b,value):u8(value);const i=hEnd(b);if(i===-1)continue;const t=td.decode(b.slice(0,i+4));if(!t.startsWith('HTTP/1.1 200')&&!t.startsWith('HTTP/1.0 200'))throw new Error('Connect failed');const tail=b.slice(i+4);if(tail.length)x.tail=tail;rel(r);return x}
+    for(;;){const{value,done}=await race(r.read());if(done)throw new Error('Proxy closed');b=b.length?cat(b,value):u8(value);let i=0;for(;i+3<b.length&&!(b[i]===13&&b[i+1]===10&&b[i+2]===13&&b[i+3]===10);i++);if(i+3>=b.length)continue;const t=td.decode(b.slice(0,i+4));if(!t.startsWith('HTTP/1.1 200')&&!t.startsWith('HTTP/1.0 200'))throw new Error('Connect failed');const tail=b.slice(i+4);if(tail.length)x.tail=tail;rel(r);return x}
   }catch(e){await closeAll(r,x);throw e}
 }
 
-async function sC(h,pt,c){
-  const x=await dC(c.h,c.pt);let r=null;
+async function sC(dc,h,pt,c){
+  const x=await dC(dc,c.h,c.pt);let r=null;
   try{
     x.w=x.sock.writable.getWriter();r=x.sock.readable.getReader();
     await x.w.write(new Uint8Array([5,2,0,2]));let b=z,head;[head,b]=await rN(r,b,2);
@@ -205,8 +204,6 @@ async function sC(h,pt,c){
 }
 
 async function rN(r,b,n){while(b.length<n){const{value,done}=await race(r.read());if(done)throw new Error('Proxy closed');b=b.length?cat(b,value):u8(value)}return[b.slice(0,n),b.slice(n)]}
-const hEnd=b=>{for(let i=0;i+3<b.length;i++)if(b[i]===13&&b[i+1]===10&&b[i+2]===13&&b[i+3]===10)return i;return-1};
-
 function hU(w,vh,done){
   let sent=false,cache=z,closed=false,send=async q=>{
     if(closed)return;
