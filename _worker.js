@@ -150,13 +150,13 @@ async function cn(dc,addr,port,data,px,s5,gs5,w,lg=dbg){
   const cfg=s5?pS(s5):null,fb=()=>cfg?cfg.isHttp?hC(dc,addr,port,cfg):sC(dc,addr,port,cfg):pC(dc,px,port,lg);
   const use=async c=>{try{if(w.readyState!==WebSocket.OPEN)throw new Error('closed');c.w||=c.sock.writable.getWriter();if(data.length)await c.w.write(data);return c}catch(e){await closeAll(c);throw e}};
   if(gs5&&cfg)return use(await fb());
-  try{const c=await use(await dC(dc,addr,port));c.retry=async()=>use(await fb());return c}catch(e){if(w.readyState!==WebSocket.OPEN)throw e;lg('tcp fallback',e?.message||'direct failed');return use(await fb())}
+  try{const c=await use(await dC(dc,addr,port));c.retry=async()=>use(await fb());return c}catch(e){if(w.readyState!==WebSocket.OPEN)throw e;lg('tcp fallback',`${addr}:${port} ${e?.message||'direct failed'}`);return use(await fb())}
 }
 
 async function dC(dc,h,p){const sock=dc({hostname:h,port:p});try{await race(sock.opened);return{sock}}catch(e){await closeAll(sock);throw e}}
 async function pC(dc,px,port,lg=dbg){
   const d=tH(px);
-  if(d){const l=await pT(d);if(l?.length){const x=l[Math.floor(Math.random()*l.length)];return dC(dc,x.h,x.p)}const[h,p]=pH(d,port);lg('txt fallback',`${h}:${p}`);return dC(dc,h,p)}
+  if(d){const l=await pT(d);if(l?.length){const x=l[Math.floor(Math.random()*l.length)];lg('txt proxy',`${x.h}:${x.p}`);return dC(dc,x.h,x.p)}const[h,p]=pH(d,port);lg('txt fallback',`${h}:${p}`);return dC(dc,h,p)}
   const[h,p]=pH(px,port);return dC(dc,h,p);
 }
 async function rl(c,w,vh,end,setC,er=dbe,lg=dbg){
@@ -176,6 +176,7 @@ async function rl(c,w,vh,end,setC,er=dbe,lg=dbg){
     }));
   }catch(e){err=e}
   if(!has&&c.retry&&w.readyState===WebSocket.OPEN){
+    lg('retry fallback','no remote data');
     const old=c;if(!setC(null,true)){await closeAll(old);return}await closeAll(old);
     try{const nc=await old.retry();if(!setC(nc))return;return rl(nc,w,vh,end,setC,er,lg)}catch(e){err=e}
   }

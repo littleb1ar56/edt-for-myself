@@ -36,13 +36,14 @@ vless://<UUID>@<优选域名或ip>:<端口>?encryption=none&security=tls&sni=<�
 | `P`    | fallback 代理 IP:Port（直连失败时使用） | `example.com:443` |
 | `S5`   | SOCKS5/HTTP 代理地址 | `socks5://user:pass@host:port` 或 `http://user:pass@host:port`）|
 | `GS5`  | 是否启用全局 SOCKS5 模式 | `false` |
-| `D`    | 是否启用运行日志 | `false` |
+| `D`    | 是否启用运行日志（调试后建议关闭） | `false` |
 | `sub`  | 默认订阅器地址 | `sub.glimmer.hidns.vip` |
 | `uid`  | 订阅路径标识 | `ikun` |
 
 **说明**：
 - `P` 参数支持 `txt@domain` 格式，自动解析TXT记录中的代理列表并随机选择一个
 - `S5` 参数同时支持 SOCKS5 和 HTTP CONNECT 代理
+- `D=true` 会输出连接阶段、fallback、UDP DoH 和结束原因等调试日志；日志可能包含目标地址，排障后建议恢复为 `false`
 
 ## 3. 路径参数使用示例
 
