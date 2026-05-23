@@ -95,7 +95,8 @@ async function pT(d){
 
 function ws(r,px,s5,gs5){
   const eh=r.headers.get('sec-websocket-protocol')||'',dc=r.fetcher?.connect?.bind(r.fetcher);if(!dc)throw new Error('connect unavailable');
-  const lg=dbg,er=dbe;
+  let lp='';
+  const lg=(a,b='')=>dbg(lp?`${lp} ${a}`:a,b),er=(a,e)=>dbe(lp?`${lp} ${a}`:a,e);
   const[client,w]=Object.values(new WebSocketPair());w.binaryType='arraybuffer';w.accept({allowHalfOpen:true});
   const pd=tH(px);if(pd)pT(pd).catch(e=>{if(!quiet(e))er('txt warmup failed',e)});
   let c=null,dw=null,closed=false,hold=null,unhold=null,ut=0;
@@ -118,7 +119,8 @@ function ws(r,px,s5,gs5){
   const open=async d=>{
     const p=pV(d);if(!p)throw new Error('Invalid VLESS request');
     const vh=new Uint8Array([p.ver,0]),first=d.subarray(p.idx);
-    lg('open',`${p.isUDP?'udp':'tcp'} ${p.addr}:${p.port} first=${first.byteLength}`);
+    lp=`[${p.addr}:${p.port}--${Math.random()} ${p.isUDP?'udp':'tcp'}]`;
+    lg('open',`first=${first.byteLength}`);
     if(p.isUDP){
       if(p.port!==53)throw new Error('Invalid UDP port');
       dw=hU(w,vh,udpIdle,lg);if(first.byteLength)await dw.write(first);return;
