@@ -37,6 +37,7 @@ const b64=s=>{if(!s)return null;try{let x=s.replace(/-/g,'+').replace(/_/g,'/');
 const cat=(...a)=>{const l=a.map(u8),o=new Uint8Array(l.reduce((n,x)=>n+x.length,0));let p=0;for(const x of l){o.set(x,p);p+=x.length}return o};
 const dbg=(s,x='')=>{if(D)console.log(`${s}${x?' '+x:''}`)};
 const dbe=(s,e)=>{if(D)console.error(s,e?.stack||e?.message||e||'')};
+const eM=e=>e?.errors?.[0]?.message||e?.message||e||'failed';
 const quiet=e=>/cancel|closed|aborted|network connection lost/i.test(e?.message||e||'');
 const rel=x=>{try{x?.releaseLock?.()}catch{}};
 const closeAll=async(...a)=>{
@@ -148,15 +149,15 @@ async function cn(dc,addr,port,data,px,s5,gs5,w,lg=dbg){
   data=data||z;
   const cfg=s5?pS(s5):null,fb=()=>cfg?cfg.isHttp?hC(dc,addr,port,cfg):sC(dc,addr,port,cfg):pC(dc,px,port,lg);
   const use=async c=>{try{if(w.readyState!==WebSocket.OPEN)throw new Error('closed');c.w||=c.sock.writable.getWriter();if(data.length)await c.w.write(data);return c}catch(e){await closeAll(c);throw e}};
-  const useFb=async()=>{try{return await use(await fb())}catch(e){if(cfg)lg('proxy failed',e?.message||'fallback failed');throw e}};
+  const useFb=async()=>{try{if(cfg)lg('fallback proxy',`${cfg.h}:${cfg.pt}`);return await use(await fb())}catch(e){if(cfg)lg('proxy failed',`${cfg.h}:${cfg.pt} ${eM(e)}`);throw e}};
   if(gs5&&cfg)return useFb();
-  try{const c=await use(await dC(dc,addr,port));c.retry=useFb;return c}catch(e){if(w.readyState!==WebSocket.OPEN)throw e;lg('tcp fallback',`${addr}:${port} ${e?.message||'direct failed'}`);return useFb()}
+  try{const c=await use(await dC(dc,addr,port));c.retry=useFb;return c}catch(e){if(w.readyState!==WebSocket.OPEN)throw e;lg('direct failed',`${addr}:${port} ${eM(e)}`);return useFb()}
 }
 
 async function dC(dc,h,p){const sock=dc({hostname:h,port:p});try{await race(sock.opened);return{sock}}catch(e){await closeAll(sock);throw e}}
 async function pC(dc,px,port,lg=dbg){
   const d=tH(px);
-  const dP=(h,p)=>dC(dc,h,p).catch(e=>{lg('proxy failed',`${h}:${p} ${e?.message||'failed'}`);throw e});
+  const dP=(h,p)=>{lg('fallback proxy',`${h}:${p}`);return dC(dc,h,p).catch(e=>{lg('proxy failed',`${h}:${p} ${eM(e)}`);throw e})};
   if(d){const l=await pT(d);if(l?.length){const x=l[Math.floor(Math.random()*l.length)];return dP(x.h,x.p)}const[h,p]=pH(d,port);lg('txt fallback',`${h}:${p}`);return dP(h,p)}
   const[h,p]=pH(px,port);return dP(h,p);
 }
