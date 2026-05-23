@@ -37,7 +37,6 @@ const b64=s=>{if(!s)return null;try{let x=s.replace(/-/g,'+').replace(/_/g,'/');
 const cat=(...a)=>{const l=a.map(u8),o=new Uint8Array(l.reduce((n,x)=>n+x.length,0));let p=0;for(const x of l){o.set(x,p);p+=x.length}return o};
 const dbg=(s,x='')=>{if(D)console.log(`${s}${x?' '+x:''}`)};
 const dbe=(s,e)=>{if(D)console.error(s,e?.stack||e?.message||e||'')};
-const mkL=r=>{const i=(r.headers.get('cf-ray')||Date.now().toString(36)).slice(0,8),s=Date.now();return[(a,b='')=>dbg(i+' '+a,b),(a,e)=>dbe(i+' '+a,e),()=>Date.now()-s]};
 const quiet=e=>/cancel|closed|aborted|network connection lost/i.test(e?.message||e||'');
 const rel=x=>{try{x?.releaseLock?.()}catch{}};
 const closeAll=async(...a)=>{
@@ -95,7 +94,7 @@ async function pT(d){
 
 function ws(r,px,s5,gs5){
   const eh=r.headers.get('sec-websocket-protocol')||'',dc=r.fetcher?.connect?.bind(r.fetcher);if(!dc)throw new Error('connect unavailable');
-  const[lg,er,ms]=mkL(r);
+  const lg=dbg,er=dbe;
   const[client,w]=Object.values(new WebSocketPair());w.binaryType='arraybuffer';w.accept({allowHalfOpen:true});
   const pd=tH(px);if(pd)pT(pd).catch(e=>{if(!quiet(e))er('txt warmup failed',e)});
   let c=null,dw=null,closed=false,hold=null,unhold=null,ut=0;
@@ -107,7 +106,7 @@ function ws(r,px,s5,gs5){
     return 1;
   };
   const end=async why=>{
-    if(closed)return;lg('end',`${why||'done'} ms=${ms()}`);closed=true;
+    if(closed)return;if(why!=='client'&&why!=='remote')lg('end',why||'done');closed=true;
     if(ut)clearTimeout(ut);ut=0;
     if(unhold){const r=unhold;hold=null;unhold=null;r()}
     const tdw=dw,tc=c;dw=null;c=null;
@@ -149,15 +148,17 @@ async function cn(dc,addr,port,data,px,s5,gs5,w,lg=dbg){
   data=data||z;
   const cfg=s5?pS(s5):null,fb=()=>cfg?cfg.isHttp?hC(dc,addr,port,cfg):sC(dc,addr,port,cfg):pC(dc,px,port,lg);
   const use=async c=>{try{if(w.readyState!==WebSocket.OPEN)throw new Error('closed');c.w||=c.sock.writable.getWriter();if(data.length)await c.w.write(data);return c}catch(e){await closeAll(c);throw e}};
-  if(gs5&&cfg)return use(await fb());
-  try{const c=await use(await dC(dc,addr,port));c.retry=async()=>use(await fb());return c}catch(e){if(w.readyState!==WebSocket.OPEN)throw e;lg('tcp fallback',`${addr}:${port} ${e?.message||'direct failed'}`);return use(await fb())}
+  const useFb=async()=>{try{return await use(await fb())}catch(e){if(cfg)lg('proxy failed',e?.message||'fallback failed');throw e}};
+  if(gs5&&cfg)return useFb();
+  try{const c=await use(await dC(dc,addr,port));c.retry=useFb;return c}catch(e){if(w.readyState!==WebSocket.OPEN)throw e;lg('tcp fallback',`${addr}:${port} ${e?.message||'direct failed'}`);return useFb()}
 }
 
 async function dC(dc,h,p){const sock=dc({hostname:h,port:p});try{await race(sock.opened);return{sock}}catch(e){await closeAll(sock);throw e}}
 async function pC(dc,px,port,lg=dbg){
   const d=tH(px);
-  if(d){const l=await pT(d);if(l?.length){const x=l[Math.floor(Math.random()*l.length)];lg('txt proxy',`${x.h}:${x.p}`);return dC(dc,x.h,x.p)}const[h,p]=pH(d,port);lg('txt fallback',`${h}:${p}`);return dC(dc,h,p)}
-  const[h,p]=pH(px,port);return dC(dc,h,p);
+  const dP=(h,p)=>dC(dc,h,p).catch(e=>{lg('proxy failed',`${h}:${p} ${e?.message||'failed'}`);throw e});
+  if(d){const l=await pT(d);if(l?.length){const x=l[Math.floor(Math.random()*l.length)];return dP(x.h,x.p)}const[h,p]=pH(d,port);lg('txt fallback',`${h}:${p}`);return dP(h,p)}
+  const[h,p]=pH(px,port);return dP(h,p);
 }
 async function rl(c,w,vh,end,setC,er=dbe,lg=dbg){
   let hdr=vh,has=false,err=null;
@@ -171,7 +172,6 @@ async function rl(c,w,vh,end,setC,er=dbe,lg=dbg){
     if(c.tail?.length){send(c.tail);c.tail=z}
     await c.sock.readable.pipeTo(new WritableStream({
       write(ch){send(ch)},
-      close(){lg('remote close',String(has))},
       abort(r){err=r||new Error('remote abort')}
     }));
   }catch(e){err=e}
