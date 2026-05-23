@@ -37,6 +37,7 @@ const b64=s=>{if(!s)return null;try{let x=s.replace(/-/g,'+').replace(/_/g,'/');
 const cat=(...a)=>{const l=a.map(u8),o=new Uint8Array(l.reduce((n,x)=>n+x.length,0));let p=0;for(const x of l){o.set(x,p);p+=x.length}return o};
 const dbg=(s,x='')=>{if(D)console.log(`${s}${x?' '+x:''}`)};
 const dbe=(s,e)=>{if(D)console.error(s,e?.stack||e?.message||e||'')};
+const mkL=r=>{const i=(r.headers.get('cf-ray')||Date.now().toString(36)).slice(0,8),s=Date.now();return[(a,b='')=>dbg(i+' '+a,b),(a,e)=>dbe(i+' '+a,e),()=>Date.now()-s]};
 const quiet=e=>/cancel|closed|aborted|network connection lost/i.test(e?.message||e||'');
 const rel=x=>{try{x?.releaseLock?.()}catch{}};
 const closeAll=async(...a)=>{
@@ -94,8 +95,9 @@ async function pT(d){
 
 function ws(r,px,s5,gs5){
   const eh=r.headers.get('sec-websocket-protocol')||'',dc=r.fetcher?.connect?.bind(r.fetcher);if(!dc)throw new Error('connect unavailable');
+  const[lg,er,ms]=mkL(r);
   const[client,w]=Object.values(new WebSocketPair());w.binaryType='arraybuffer';w.accept({allowHalfOpen:true});
-  const pd=tH(px);if(pd)pT(pd).catch(e=>{if(!quiet(e))dbe('txt warmup failed',e)});
+  const pd=tH(px);if(pd)pT(pd).catch(e=>{if(!quiet(e))er('txt warmup failed',e)});
   let c=null,dw=null,closed=false,hold=null,unhold=null,ut=0;
   const setC=(x,p=false)=>{
     if(closed){void closeAll(x);return 0}
@@ -105,25 +107,25 @@ function ws(r,px,s5,gs5){
     return 1;
   };
   const end=async why=>{
-    if(closed)return;dbg('end',why||'done');closed=true;
+    if(closed)return;lg('end',`${why||'done'} ms=${ms()}`);closed=true;
     if(ut)clearTimeout(ut);ut=0;
     if(unhold){const r=unhold;hold=null;unhold=null;r()}
     const tdw=dw,tc=c;dw=null;c=null;
-    await closeAll(tdw,tc);try{if(w.readyState===WebSocket.OPEN)w.close(1000)}catch(e){if(!quiet(e))dbe('ws close failed',e)}
+    await closeAll(tdw,tc);try{if(w.readyState===WebSocket.OPEN)w.close(1000)}catch(e){if(!quiet(e))er('ws close failed',e)}
   };
-  const stop=why=>{end(why).catch(e=>{if(!quiet(e))dbe('end failed',e)})};
+  const stop=why=>{end(why).catch(e=>{if(!quiet(e))er('end failed',e)})};
   const udpIdle=()=>{if(ut)clearTimeout(ut);ut=setTimeout(()=>stop('udp idle'),K.ui)};
   const open=async d=>{
     const p=pV(d);if(!p)throw new Error('Invalid VLESS request');
     const vh=new Uint8Array([p.ver,0]),first=d.subarray(p.idx);
-    dbg('open',`${p.isUDP?'udp':'tcp'} ${p.addr}:${p.port} first=${first.byteLength}`);
+    lg('open',`${p.isUDP?'udp':'tcp'} ${p.addr}:${p.port} first=${first.byteLength}`);
     if(p.isUDP){
       if(p.port!==53)throw new Error('Invalid UDP port');
-      dw=hU(w,vh,udpIdle);if(first.byteLength)await dw.write(first);return;
+      dw=hU(w,vh,udpIdle,lg);if(first.byteLength)await dw.write(first);return;
     }
-    const nc=await cn(dc,p.addr,p.port,first,px,s5,gs5,w);
+    const nc=await cn(dc,p.addr,p.port,first,px,s5,gs5,w,lg);
     if(!setC(nc))return;
-    rl(nc,w,vh,end,setC).catch(e=>{if(!quiet(e))dbe('rl failed',e);stop('remote error')});
+    rl(nc,w,vh,end,setC,er,lg).catch(e=>{if(!quiet(e))er('rl failed',e);stop('remote error')});
   };
   mR(w,eh).pipeTo(new WritableStream({
     async write(ch){
@@ -134,30 +136,30 @@ function ws(r,px,s5,gs5){
         if(dw){if(ut)clearTimeout(ut);ut=0;await dw.write(d);return}
         if(c){c.w||=c.sock.writable.getWriter();await c.w.write(d);return}
         await open(d);
-      }catch(e){if(!quiet(e))dbg('pump error',e?.message||'error');await end('pump')}
+      }catch(e){if(!quiet(e))lg('pump error',e?.message||'error');await end('pump')}
     },
     close(){return end('client')},
     abort(){return end('client error')}
-  })).catch(e=>{if(!quiet(e))dbe('ws pipe failed',e);stop('pipe')});
+  })).catch(e=>{if(!quiet(e))er('ws pipe failed',e);stop('pipe')});
   w.addEventListener('close',()=>stop('client'));w.addEventListener('error',()=>stop('client error'));
   return new Response(null,{status:101,webSocket:client,headers:{'Sec-WebSocket-Extensions':''}});
 }
 
-async function cn(dc,addr,port,data,px,s5,gs5,w){
+async function cn(dc,addr,port,data,px,s5,gs5,w,lg=dbg){
   data=data||z;
-  const cfg=s5?pS(s5):null,fb=()=>cfg?cfg.isHttp?hC(dc,addr,port,cfg):sC(dc,addr,port,cfg):pC(dc,px,port);
+  const cfg=s5?pS(s5):null,fb=()=>cfg?cfg.isHttp?hC(dc,addr,port,cfg):sC(dc,addr,port,cfg):pC(dc,px,port,lg);
   const use=async c=>{try{if(w.readyState!==WebSocket.OPEN)throw new Error('closed');c.w||=c.sock.writable.getWriter();if(data.length)await c.w.write(data);return c}catch(e){await closeAll(c);throw e}};
   if(gs5&&cfg)return use(await fb());
-  try{const c=await use(await dC(dc,addr,port));c.retry=async()=>use(await fb());return c}catch(e){if(w.readyState!==WebSocket.OPEN)throw e;dbg('tcp fallback',e?.message||'direct failed');return use(await fb())}
+  try{const c=await use(await dC(dc,addr,port));c.retry=async()=>use(await fb());return c}catch(e){if(w.readyState!==WebSocket.OPEN)throw e;lg('tcp fallback',e?.message||'direct failed');return use(await fb())}
 }
 
 async function dC(dc,h,p){const sock=dc({hostname:h,port:p});try{await race(sock.opened);return{sock}}catch(e){await closeAll(sock);throw e}}
-async function pC(dc,px,port){
+async function pC(dc,px,port,lg=dbg){
   const d=tH(px);
-  if(d){const l=await pT(d);if(l?.length){const x=l[Math.floor(Math.random()*l.length)];return dC(dc,x.h,x.p)}const[h,p]=pH(d,port);dbg('txt fallback',`${h}:${p}`);return dC(dc,h,p)}
+  if(d){const l=await pT(d);if(l?.length){const x=l[Math.floor(Math.random()*l.length)];return dC(dc,x.h,x.p)}const[h,p]=pH(d,port);lg('txt fallback',`${h}:${p}`);return dC(dc,h,p)}
   const[h,p]=pH(px,port);return dC(dc,h,p);
 }
-async function rl(c,w,vh,end,setC){
+async function rl(c,w,vh,end,setC,er=dbe,lg=dbg){
   let hdr=vh,has=false,err=null;
   const send=d=>{
     d=u8(d);if(!d.length)return;
@@ -169,15 +171,15 @@ async function rl(c,w,vh,end,setC){
     if(c.tail?.length){send(c.tail);c.tail=z}
     await c.sock.readable.pipeTo(new WritableStream({
       write(ch){send(ch)},
-      close(){dbg('remote close',String(has))},
+      close(){lg('remote close',String(has))},
       abort(r){err=r||new Error('remote abort')}
     }));
   }catch(e){err=e}
   if(!has&&c.retry&&w.readyState===WebSocket.OPEN){
     const old=c;if(!setC(null,true)){await closeAll(old);return}await closeAll(old);
-    try{const nc=await old.retry();if(!setC(nc))return;return rl(nc,w,vh,end,setC)}catch(e){err=e}
+    try{const nc=await old.retry();if(!setC(nc))return;return rl(nc,w,vh,end,setC,er,lg)}catch(e){err=e}
   }
-  if(err&&!quiet(err))dbe('remoteSocketToWS has exception',err);
+  if(err&&!quiet(err))er('remoteSocketToWS has exception',err);
   await end('remote');
 }
 
@@ -206,7 +208,7 @@ async function sC(dc,h,pt,c){
 }
 
 async function rN(r,b,n){while(b.length<n){const{value,done}=await race(r.read());if(done)throw new Error('Proxy closed');b=b.length?cat(b,value):u8(value)}return[b.slice(0,n),b.slice(n)]}
-function hU(w,vh,done){
+function hU(w,vh,done,lg=dbg){
   let sent=false,cache=z,closed=false;
   const acs=new Set();
   const doh=async q=>{
@@ -218,11 +220,11 @@ function hU(w,vh,done){
     if(closed)return;
     try{
       const r=await doh(q);
-      if(!r.ok){dbg('udp doh status',String(r.status));return}
+      if(!r.ok){lg('udp doh status',String(r.status));return}
       const d=new Uint8Array(await r.arrayBuffer()),l=new Uint8Array([d.length>>8,d.length&255]);
       if(closed||w.readyState!==WebSocket.OPEN)return;
       w.send(sent?cat(l,d):cat(vh,l,d));sent=true;done?.();
-    }catch(e){if(!closed&&!quiet(e))dbg('udp doh error',e?.message||'error')}
+    }catch(e){if(!closed&&!quiet(e))lg('udp doh error',e?.message||'error')}
   };
   const close=()=>{closed=true;cache=z;for(const a of acs)a.abort();acs.clear()};
   return{
