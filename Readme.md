@@ -1,8 +1,8 @@
-# VLESS over WebSocket Cloudflare Worker
+# VLESS over WebSocket 
 
 ## 部署说明
 
-1. 将 `_worker.js` 复制到 Cloudflare Workers/同样支持`snippets`部署。
+1. 将 `_worker.js` 复制到  `Worker`/`pages`/`snippets`。
 2. 根据需求修改配置区参数（UUID、代理地址等）
 3. 部署并设置自定义域名
 4. 配置客户端使用 WebSocket 连接
